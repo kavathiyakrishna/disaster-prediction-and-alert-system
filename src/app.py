@@ -22,7 +22,7 @@ DB_PATH = BASE_DIR / "disaster_alert.db"
 # STREAMLIT CONFIG
 # ----------------------------
 st.set_page_config(
-    page_title="Disaster Management & Alert System",
+    page_title="Disaster Prediction & Alert System",
     page_icon="⚠️",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -39,6 +39,10 @@ h1, h2, h3, h4, h5, h6, p {color: #000000;}
 .stButton>button {background-color: #ffffff; color: #000000; border: 1px solid #ccc;}
 .stMetric {color: #000000;}
 .stDataFrame, .stFrame {background-color: #ffffff; color: #000000;}
+/* ---- Smaller Admin Login Inputs ---- */
+div[data-testid="stTextInput"] > div > div > input {
+    width: 60% !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -116,7 +120,7 @@ if menu == "Home":
             aid, disaster, prob, msg, ts, handled = a
             row_color = "#ffffff" if i % 2 == 0 else "#f2f2f2"
 
-            col1, col2 = st.columns([1, 5])  # Left side delete button
+            col1, col2 = st.columns([1, 5])
             with col1:
                 if st.button("Delete", key=f"delete_{aid}"):
                     conn = sqlite3.connect(DB_PATH)
@@ -125,6 +129,7 @@ if menu == "Home":
                     conn.commit()
                     conn.close()
                     st.experimental_rerun()
+
             with col2:
                 st.markdown(f"""
                     <div style='border:1px solid #ccc; padding:10px; margin-bottom:8px; border-radius:8px; background-color:{row_color}'>
@@ -132,7 +137,6 @@ if menu == "Home":
                         <b>Message:</b> {msg}<br>
                         <b>Probability:</b> {prob:.2%}<br>
                         <b>Timestamp:</b> {ts}<br>
-                        <b>Handled:</b> {'Yes' if handled else 'No'}
                     </div>
                 """, unsafe_allow_html=True)
     else:
@@ -140,10 +144,11 @@ if menu == "Home":
 
     st.markdown("---")
 
-    # Disaster prediction
+    # ----------- Prediction -----------
     st.subheader("Predict Disaster Risk")
     disaster = st.selectbox("Select disaster type", ["landslide", "wildfire", "cyclone", "earthquake", "flood"])
     model, meta = load_model(disaster) or (None, {})
+
     if model is None:
         st.warning("Model missing. Train your models using train_models.py.")
     else:
@@ -151,20 +156,26 @@ if menu == "Home":
         model_acc = meta.get("accuracy", None)
         cols = st.columns(2)
         values = {}
+
         for i, feat in enumerate(features):
             values[feat] = cols[i % 2].number_input(f"{feat}", value=0.0)
+
+        # --- INPUT VALIDATION ---
         if st.button("Predict"):
-            res = predict(disaster, values)
-            prob = res["probability"]
-
-            st.metric("Prediction Probability", f"{prob:.2%}")
-            if model_acc:
-                st.metric("Model Accuracy", f"{model_acc:.2%}")
-
-            if res["alert"]:
-                st.error(f"🚨 HIGH RISK — {res['message']}")
+            if any(v == 0.0 for v in values.values()):
+                st.warning("⚠️ Enter all values greater than 0 before predicting.")
             else:
-                st.success(f"Safe — {res['message']}")
+                res = predict(disaster, values)
+                prob = res["probability"]
+
+                st.metric("Prediction Probability", f"{prob:.2%}")
+                if model_acc:
+                    st.metric("Model Accuracy", f"{model_acc:.2%}")
+
+                if res["alert"]:
+                    st.error(f"🚨 HIGH RISK — {res['message']}")
+                else:
+                    st.success(f"Safe — {res['message']}")
 
 # ----------------------------
 # ADMIN PAGE
@@ -223,6 +234,7 @@ elif menu == "Admin":
                             st.experimental_rerun()
                         except Exception as e:
                             st.error(f"Error deleting dataset: {e}")
+
                 with col2:
                     st.markdown(f"""
                         <div style='border:1px solid #ccc; padding:10px; margin-bottom:4px; border-radius:6px; background-color:{row_color}'>
@@ -252,6 +264,7 @@ elif menu == "Alerts":
                     conn.commit()
                     conn.close()
                     st.experimental_rerun()
+
             with col2:
                 st.markdown(f"""
                     <div style='border:1px solid #ccc; padding:10px; margin-bottom:8px; border-radius:8px; background-color:{row_color}'>
@@ -259,9 +272,8 @@ elif menu == "Alerts":
                         <b>Message:</b> {msg}<br>
                         <b>Probability:</b> {prob:.2%}<br>
                         <b>Timestamp:</b> {ts}<br>
-                        <b>Handled:</b> {'Yes' if handled else 'No'}
                     </div>
                 """, unsafe_allow_html=True)
+
     else:
         st.info("No alerts available.")
-
